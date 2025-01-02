@@ -2,13 +2,13 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import boto3
 from boto3.session import Session
 from botocore.client import BaseClient
 
-from s3_file_analyzer import S3FileAnalyzer
+from s3_tools import S3FileAnalyzer
 from tool import Tool
 
 
