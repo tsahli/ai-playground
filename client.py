@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import sys
 from dataclasses import dataclass
 from typing import Dict, List, Optional
@@ -8,6 +9,7 @@ import boto3
 from boto3.session import Session
 from botocore.client import BaseClient
 
+from dispute_analyzer import DisputeAnalyzer
 from s3_tools import S3FileAnalyzer
 from tool import Tool
 
@@ -23,9 +25,112 @@ class ModelResponse:
 
 class BedrockClient:
     DEFAULT_MODEL_ARN = "arn:aws:bedrock:us-east-1:518030533805:inference-profile/us.anthropic.claude-3-5-sonnet-20241022-v2:0"
-    DEFAULT_SYSTEM_PROMPT = """You are a helpful AI assistant with access to tools for analyzing S3 resources.
-    When users ask about S3 buckets or files, use the analyze_s3 tool to help them. For bucket listings, use the 'list_buckets' operation.
-    For file contents, use 'read_text'. For file information, use 'get_file_info'. For PDF analysis, use the 'analyze_pdf' tool with OCR cababilities.
+    DEFAULT_SYSTEM_PROMPT = """
+        You are an AI assistant specializing in credit card dispute analysis and S3 file management. You have access to sophisticated tools for analyzing disputes, files, and data stored in S3 buckets. Your capabilities include:
+
+        FILE ANALYSIS CAPABILITIES:
+            S3 Operations (via analyze_s3 tool):
+                List all S3 buckets (list_buckets)
+                Read text file contents (read_text)
+                Get detailed file metadata (get_file_info)
+                Analyze CSV files with comprehensive statistics (analyze_csv)
+                Process PDF documents with text extraction and layout analysis (analyze_pdf)
+
+            CSV Analysis Features:
+                Basic file statistics (size, rows, columns)
+                Detailed column-level analysis
+                Data type detection and validation
+                Null value analysis
+                Numeric column statistics (min, max, mean, median, std)
+                String column analysis (length, patterns, frequent values)
+                Date column analysis
+                Correlation analysis for numeric columns
+                Automated data quality warnings
+
+            PDF Analysis Features:
+                Document metadata extraction
+                Page-by-page content analysis
+                Image, table, and link detection
+                Text extraction with OCR capabilities
+                Document structure analysis
+                Comprehensive statistics on document elements
+
+        DISPUTE ANALYSIS CAPABILITIES:
+            Dispute Processing (via analyze_dispute tool):
+                Fetch complete dispute details from Checkout.com API
+                Access formatted transaction amounts
+                Analyze dispute categories and reason codes
+                Review status and deadline information
+                Examine required evidence types
+                Evaluate payment details
+
+
+        OPERATIONAL GUIDELINES:
+            When analyzing files:
+                Start with basic file information before detailed analysis
+                Consider file size and potential processing limitations
+                Use appropriate analysis methods based on file type
+                Look for patterns and anomalies in the data
+                Provide clear summaries of findings
+
+            For CSV files:
+                Check data quality and completeness
+                Identify potential issues in data structure
+                Analyze relationships between columns
+                Highlight significant patterns or anomalies
+                Consider sample size for large datasets
+
+            For PDF documents:
+                Extract and summarize key content
+                Analyze document structure and layout
+                Identify important elements (tables, images)
+                Consider both text content and visual elements
+                Provide page-level breakdowns when relevant
+
+            For Dispute Analysis:
+                When evaluating disputes:
+                    Review all available dispute information
+                    Consider transaction history and patterns
+                    Analyze evidence requirements carefully
+                    Provide clear recommendations with rationale
+                    Clearly state if the dispute should be CHALLENGED or ACCEPTED
+                    Suggest specific next steps
+
+                Key factors to consider:
+                    Dispute category and reason code implications
+                    Timeline and deadline requirements
+                    Available evidence strength
+                    Transaction characteristics
+                    Historical patterns if available
+
+        RESPONSE GUIDELINES:
+            Always provide:
+                Clear, structured analysis
+                Evidence-based recommendations
+                Specific next steps
+                Relevant warnings or limitations
+                Context for technical findings
+
+            When handling errors:
+                Explain issues clearly
+                Suggest alternative approaches
+                Provide workarounds when possible
+                Maintain proper error handling
+                Document any limitations encountered
+
+            For complex analyses:
+                Break down findings into manageable sections
+                Highlight key insights
+                Provide both summary and detailed views
+                Use appropriate technical terminology
+                Include relevant metrics and statistics
+
+            Remember to:
+                Maintain professional communication
+                Focus on actionable insights
+                Consider both technical and business implications
+                Provide clear context for all recommendations
+                Document any assumptions or limitations
     """
 
     def __init__(
@@ -34,6 +139,7 @@ class BedrockClient:
         region_name: str = "us-east-1",
         system_prompt: Optional[str] = None,
         model_arn: Optional[str] = None,
+        doc_dirs: Optional[List[str]] = ["dispute_docs", "scanline_docs"],
     ) -> None:
         self.session: Session = boto3.Session(profile_name=profile_name)
         self.client: BaseClient = self.session.client(
@@ -41,12 +147,26 @@ class BedrockClient:
             region_name=region_name,
         )
         self.conversation_history: List[Dict] = []
-        self.system_prompt = system_prompt or self.DEFAULT_SYSTEM_PROMPT
         self.model_arn = model_arn or self.DEFAULT_MODEL_ARN
         self.tools: Dict[str, Tool] = {}
 
+        all_docs = []
+        for docs_dir in doc_dirs:
+            if os.path.exists(docs_dir):
+                all_docs.append(self.load_reference_docs(docs_dir))
+        reference_docs = "\n\n".join(all_docs)
+
+        self.system_prompt = f"{system_prompt or self.DEFAULT_SYSTEM_PROMPT}\n\nReference Documentation:\n{reference_docs}"
+
     def register_tool(self, tool: Tool) -> None:
         self.tools[tool.name] = tool
+
+    def load_reference_docs(self, docs_dir: str = "disputes_docs") -> None:
+        docs = []
+        for filename in os.listdir(docs_dir):
+            with open(f"{docs_dir}/{filename}", "r") as f:
+                docs.append(f.read())
+        return "\n\n".join(docs)
 
     def invoke_model(
         self,
@@ -269,6 +389,12 @@ def create_parser() -> argparse.ArgumentParser:
         default=BedrockClient.DEFAULT_MODEL_ARN,
         help="Override the default model ARN",
     )
+    parser.add_argument(
+        "--doc-dirs",
+        nargs="*",
+        default=["dispute_docs", "scanline_docs"],
+        help="Directories containing reference documentation",
+    )
     return parser
 
 
@@ -306,6 +432,16 @@ def main() -> None:
     )
     s3_analyzer = S3FileAnalyzer(client.session)
     client.register_tool(s3_analyzer.create_tool())
+
+    try:
+        from config import CHECKOUT_API_KEY
+
+        dispute_analyzer = DisputeAnalyzer(CHECKOUT_API_KEY)
+        client.register_tool(dispute_analyzer.create_tool())
+    except ImportError:
+        print(
+            "Warning: config.py not found. Checkout.com API features will be disabled."
+        )
 
     try:
         if args.prompt:
