@@ -7,7 +7,6 @@ A Python client for interacting with Amazon Bedrock's Claude models, with built-
 1. Clone this repository
 2. Create and activate a virtual environment:
    ```
-    # Create virtual environment
     python -m venv venv
     source venv/bin/activate
    ```
@@ -19,16 +18,45 @@ A Python client for interacting with Amazon Bedrock's Claude models, with built-
    ```
    aws sso login --profile np-farmers
    ```
+5. Create a `config.py` file with `CHECKOUT_API_KEY`
 
-### Basic Usage
+### Usage
+
+#### Basic Usage
 
 ```
-    # interactive mode
-    python client.py
+from client import BedrockClient
 
-    # single prompt
-    python client.py --prompt "teach me to play chess"
-
-    # single prompt with system prompt override
-    python client.py --prompt "teach me to play chess" --system-prompt "talk like a pirate"
+client = BedrockClient()
+response = client.invoke_model("Your prompt here")
+print(response.content)
 ```
+
+#### Command Line Interface
+
+```
+# interactive mode
+python client.py
+
+# single prompt
+python client.py --prompt "teach me to play chess"
+
+# single prompt with system prompt override
+python client.py --prompt "teach me to play chess" --system-prompt "talk like a pirate"
+```
+
+### Configuration Options
+
+- `--profile`: AWS profile name (default: "np-farmers")
+- `--region`: AWS region (default: "us-east-1")
+- `--no-history`: Disable conversation history
+- `--system-prompt`: Override default system prompt
+- `--model-arn`: Override default Claude model ARN
+- `--doc-dirs`: Specify documentation directories
+
+### Reference Documentation
+
+The client loads reference documentation from:
+
+- [`dispute_docs/`](dispute_docs/): Documentation about dispute handling
+- [`scanline_docs/`](scanline_docs/): Documentation about scanline functionality
