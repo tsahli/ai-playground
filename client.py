@@ -172,7 +172,7 @@ class BedrockClient:
         self,
         prompt: str,
         include_history: bool = True,
-        handle_tool_calls: bool = True,
+        max_tool_rounds: int = 5,  # Add safety limit for tool call rounds
     ) -> ModelResponse:
         request_params = {
             "modelId": self.model_arn,
@@ -195,26 +195,62 @@ class BedrockClient:
         request_params["messages"].append(current_message)
 
         try:
-            parsed_response = self._parse_response(
-                self.client.converse(**request_params)
-            )
+            messages = request_params["messages"]
+            tool_round = 0
 
-            if handle_tool_calls and parsed_response.tool_calls:
-                tool_results = self._handle_tool_calls(parsed_response.tool_calls)
-                return self._continue_with_tool_results(
-                    current_message, parsed_response, tool_results, include_history
+            while tool_round < max_tool_rounds:
+                parsed_response = self._parse_response(
+                    self.client.converse(**request_params)
                 )
 
-            if include_history:
-                self.conversation_history.append(current_message)
-                self.conversation_history.append(
+                if not parsed_response.tool_calls:
+                    # No more tool calls needed, we have our final response
+                    if include_history:
+                        self.conversation_history = messages
+                        self.conversation_history.append(
+                            {
+                                "role": "assistant",
+                                "content": [{"text": parsed_response.content}],
+                            }
+                        )
+                    return parsed_response
+
+                # Handle tool calls and add results to messages
+                tool_results = self._handle_tool_calls(parsed_response.tool_calls)
+
+                # Add the assistant's message with tool calls
+                assistant_content = (
+                    [{"text": parsed_response.content}]
+                    if parsed_response.content
+                    else []
+                )
+                for tool_call in parsed_response.tool_calls:
+                    assistant_content.append(
+                        {
+                            "toolUse": {
+                                "toolUseId": tool_call["id"],
+                                "name": tool_call["name"],
+                                "input": tool_call["parameters"],
+                            }
+                        }
+                    )
+                messages.append({"role": "assistant", "content": assistant_content})
+
+                # Add tool results
+                messages.append(
                     {
-                        "role": "assistant",
-                        "content": [{"text": parsed_response.content}],
+                        "role": "user",
+                        "content": [{"toolResult": result} for result in tool_results],
                     }
                 )
 
-            return parsed_response
+                # Update request parameters with new messages
+                request_params["messages"] = messages
+                tool_round += 1
+
+            raise Exception(
+                f"Exceeded maximum number of tool rounds ({max_tool_rounds})"
+            )
 
         except Exception as e:
             raise Exception(f"Failed to invoke model: {str(e)}") from e
