@@ -86,7 +86,7 @@ class BedrockClient:
     def _build_request(self, messages: List[Dict]) -> Dict:
         request = {
             "modelId": self.model_arn,
-            "system": [{"text": self._load_system_prompt("system_prompt.yml")}],
+            "system": [{"text": self._load_system_prompt("system_prompt_longer.yml")}],
             "messages": messages,
         }
 
