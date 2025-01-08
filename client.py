@@ -54,7 +54,10 @@ class BedrockClient:
         self.tools[tool.name] = tool
 
     def invoke_model(
-        self, prompt: str, include_history: bool = True, max_tool_rounds: int = 5
+        self,
+        prompt: str,
+        include_history: bool = True,
+        max_tool_rounds: int = 10,
     ) -> ModelResponse:
         messages = self.conversation_history.copy() if include_history else []
         messages.append({"role": "user", "content": [{"text": prompt}]})
@@ -234,10 +237,12 @@ def main():
         client.register_tool(S3FileAnalyzer(client.session).create_tool())
 
         try:
-            from config import CHECKOUT_API_KEY
+            from config import CHECKOUT_API_KEY, POLICY_ENDPOINT_API_KEY
             from dispute_analyzer import DisputeAnalyzer
+            from policy_analyzer import PolicyAnalyzer
 
             client.register_tool(DisputeAnalyzer(CHECKOUT_API_KEY).create_tool())
+            client.register_tool(PolicyAnalyzer(POLICY_ENDPOINT_API_KEY).create_tool())
         except ImportError:
             print("Warning: config.py not found. Checkout.com API features disabled.")
 

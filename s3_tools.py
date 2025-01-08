@@ -1,7 +1,8 @@
 import io
+import json
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional, Type, Union
 
 import fitz  # PyMuPDF
 import numpy as np
@@ -434,6 +435,205 @@ class PDFAnalyzeOperation(S3Operation):
         }
 
 
+class GeneratePresignedUrlOperation(S3Operation):
+    name = "generate_presigned_url"
+
+    def execute(
+        self,
+        s3_client: Any,
+        bucket: Optional[str],
+        key: Optional[str],
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Dict:
+        try:
+            if not bucket or not key:
+                return {"error": "Both bucket and key are required"}
+
+            params = params or {}
+            expiration = params.get("expiration", 604800)  # Default 1 week
+            http_method = params.get("http_method", "GET")
+
+            # Generate the presigned URL
+            url = s3_client.generate_presigned_url(
+                ClientMethod=f"{http_method.lower()}_object",
+                Params={
+                    "Bucket": bucket,
+                    "Key": key,
+                },
+                ExpiresIn=expiration,
+                HttpMethod=http_method,
+            )
+
+            return {
+                "status": "success",
+                "url": url,
+                "expires_in": expiration,
+                "http_method": http_method,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+
+        except Exception as e:
+            return {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+
+    def get_parameters(self) -> Dict:
+        return {
+            "bucket": {"type": "string", "description": "S3 bucket name"},
+            "key": {"type": "string", "description": "S3 object key"},
+            "params": {
+                "type": "object",
+                "properties": {
+                    "expiration": {
+                        "type": "integer",
+                        "description": "URL expiration time in seconds (default: 604800 - one week)",
+                    },
+                    "http_method": {
+                        "type": "string",
+                        "enum": ["GET", "PUT"],
+                        "description": "HTTP method for the URL (default: GET)",
+                    },
+                },
+            },
+        }
+
+
+class WriteTextOperation(S3Operation):
+    name = "write_text"
+
+    def execute(
+        self,
+        s3_client: Any,
+        bucket: Optional[str],
+        key: Optional[str],
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Dict:
+        try:
+            if not params or "content" not in params:
+                return {"error": "No content provided to save"}
+
+            content = params["content"]
+            content_type = params.get("content_type", "text/plain")
+
+            if isinstance(content, str):
+                content = content.encode("utf-8")
+
+            response = s3_client.put_object(
+                Bucket=bucket, Key=key, Body=content, ContentType=content_type
+            )
+
+            return {
+                "status": "success",
+                "etag": response.get("ETag"),
+                "version_id": response.get("VersionId"),
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+
+        except Exception as e:
+            return {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+
+    def get_parameters(self) -> Dict:
+        return {
+            "bucket": {"type": "string", "description": "S3 bucket name"},
+            "key": {"type": "string", "description": "S3 object key"},
+            "params": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "Text content to save",
+                    },
+                    "content_type": {
+                        "type": "string",
+                        "description": "Content type (MIME type) of the file (optional, defaults to text/plain)",
+                    },
+                },
+                "required": ["content"],
+            },
+        }
+
+
+class WriteJsonOperation(S3Operation):
+    name = "write_json"
+
+    def execute(
+        self,
+        s3_client: Any,
+        bucket: Optional[str],
+        key: Optional[str],
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Dict:
+        try:
+            if not params or "content" not in params:
+                return {"error": "No content provided to save"}
+
+            content = params["content"]
+
+            # Handle both dictionary/list input and string input
+            if isinstance(content, (dict, list)):
+                content = json.dumps(content, indent=params.get("indent", 2))
+            elif not isinstance(content, str):
+                return {
+                    "error": "Content must be a JSON-serializable object or a JSON string"
+                }
+
+            # Encode the JSON string to bytes
+            content = content.encode("utf-8")
+
+            # Always use application/json content type for JSON files
+            content_type = "application/json"
+
+            response = s3_client.put_object(
+                Bucket=bucket, Key=key, Body=content, ContentType=content_type
+            )
+
+            return {
+                "status": "success",
+                "etag": response.get("ETag"),
+                "version_id": response.get("VersionId"),
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+
+        except json.JSONDecodeError as e:
+            return {
+                "error": f"Invalid JSON format: {str(e)}",
+                "error_type": "JSONDecodeError",
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        except Exception as e:
+            return {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+
+    def get_parameters(self) -> Dict:
+        return {
+            "bucket": {"type": "string", "description": "S3 bucket name"},
+            "key": {"type": "string", "description": "S3 object key"},
+            "params": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": ["object", "array", "string"],
+                        "description": "JSON content to save (can be a JSON-serializable object or a JSON string)",
+                    },
+                    "indent": {
+                        "type": "integer",
+                        "description": "Number of spaces for JSON indentation (optional, defaults to 2)",
+                    },
+                },
+                "required": ["content"],
+            },
+        }
+
+
 # Operation Registry
 class OperationRegistry:
     def __init__(self):
@@ -469,6 +669,9 @@ class S3FileAnalyzer:
         self.registry.register(GetFileInfoOperation)
         self.registry.register(AnalyzeCSVOperation)
         self.registry.register(PDFAnalyzeOperation)
+        self.registry.register(WriteTextOperation)
+        self.registry.register(WriteJsonOperation)
+        self.registry.register(GeneratePresignedUrlOperation)
 
     def add_operation(self, operation_class: Type[S3Operation]):
         """Add a new operation type to the analyzer"""
