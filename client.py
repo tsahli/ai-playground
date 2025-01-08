@@ -10,7 +10,7 @@ from botocore.client import BaseClient
 
 from system_prompt import SYSTEM_PROMPT
 from tool import Tool
-
+import yaml
 
 @dataclass
 class ModelResponse:
@@ -53,6 +53,14 @@ class BedrockClient:
     def register_tool(self, tool: Tool) -> None:
         self.tools[tool.name] = tool
 
+    def _load_system_prompt(self, system_prompt_path: Optional[str]) -> Optional[str]:
+        """Load and parse the system prompt from a YAML file."""
+        if system_prompt_path:
+            with open(system_prompt_path, "r") as file:
+                content = yaml.safe_load(file)
+            return yaml.dump(content)  # Convert back to a string if needed
+        return None
+
     def invoke_model(
         self, prompt: str, include_history: bool = True, max_tool_rounds: int = 5
     ) -> ModelResponse:
@@ -78,7 +86,7 @@ class BedrockClient:
     def _build_request(self, messages: List[Dict]) -> Dict:
         request = {
             "modelId": self.model_arn,
-            "system": [{"text": self.system_prompt}],
+            "system": [{"text": self._load_system_prompt("system_prompt.yml")}],
             "messages": messages,
         }
 

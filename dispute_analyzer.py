@@ -86,3 +86,7 @@ class DisputeAnalyzer:
             parameters=parameters,
             function=lambda dispute_id: self.get_dispute(dispute_id).__dict__,
         )
+
+    def put_dispute(self, dispute_id: str, data: Dict) -> DisputeResult:
+        """Update dispute details in API"""
+        pass
