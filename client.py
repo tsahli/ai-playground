@@ -87,10 +87,18 @@ class BedrockClient:
         raise Exception(f"Exceeded maximum tool rounds ({max_tool_rounds})")
 
     def _build_request(self, messages: List[Dict]) -> Dict:
+        infer_configs = {
+            "maxTokens": 100,
+            "temperature": 0.3,
+            "topP": 0.95
+        }
+
         request = {
             "modelId": self.model_arn,
-            "system": [{"text": self._load_system_prompt("system_prompt_longer.yml")}],
+            "system": [{"text": self.system_prompt}],
             "messages": messages,
+            "inferenceConfig":{**infer_configs}
+            # "stop_sequences": ["\n"],  # Defines where responses should stop
         }
 
         if self.tools:

@@ -278,14 +278,21 @@ SYSTEM_PROMPT = """
                     - Location: s3://farmers-qa-host/toggle/dispute_summaries/
                     - Filename: dispute_summary_{policy_number}.json
                     It should have the following structure:
+                    [
                         {
-                            "dispute_ids": ["dsp_123, dsp_456"],
+                            "dispute_id": "dsp_123",
                             "recommendation": "ACCEPT or CHALLENGE",
                             "summary": "Concise summary of analysis and key findings",
-                            "presigned_urls": {
-                                "txt_summary": "Presigned URL for the text summary file",
-                            }
-                        }
+                            "urls: "Presigned URL for the text summary file"
+                        },
+                        {
+                            "dispute_id": "dsp_123",
+                            "recommendation": "ACCEPT or CHALLENGE",
+                            "summary": "Concise summary of analysis and key findings",
+                            "urls: "Presigned URL for the text summary file"
+                        },
+                    
+                    ]
 
                     Response Format Requirements:
                     - dispute_ids: Must include all dispute IDs processed during analysis
