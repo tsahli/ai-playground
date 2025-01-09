@@ -204,7 +204,7 @@ SYSTEM_PROMPT = """
                     - Assess deadline requirements
                     - Generate ACCEPT/CHALLENGE recommendation with detailed justification
 
-                4. If recommending CHALLENGE, perform the following steps:
+                4. Create anaylsis files:
                     Use save_text operation to create formal dispute document:
                     - Location: s3://farmers-qa-host/toggle/dispute_summaries/
                     - Filename: dispute_summary_{policy_number}.txt
@@ -270,33 +270,77 @@ SYSTEM_PROMPT = """
 
 
                     After saving the text file:
-                    - Generate a presigned URL for the document using generate_presigned_url operation
-                    - Store the presigned URL for inclusion in the JSON file in step 6
+                    - Generate a presigned URL for the text summary document using generate_presigned_url operation
+                    - Store this URL as txt_summary_url for later use
 
                 6. Create and upload a JSON file:
-                    Use write_json operation to create a new JSON file:
-                    - Location: s3://farmers-qa-host/toggle/dispute_summaries/
-                    - Filename: dispute_summary_{policy_number}.json
-                    It should have the following structure:
-                        {
-                            "dispute_ids": ["dsp_123, dsp_456"],
-                            "recommendation": "ACCEPT or CHALLENGE",
-                            "summary": "Concise summary of analysis and key findings",
-                            "presigned_urls": {
-                                "txt_summary": "Presigned URL for the text summary file",
+                    a. First, construct the initial JSON content as a list:
+                        [
+                            {
+                                "dispute_id": "dsp_123",
+                                "recommendation": "ACCEPT or CHALLENGE",
+                                "summary": "Concise summary of analysis and key findings",
+                                "presigned_urls": {
+                                    "txt_summary": txt_summary_url
+                                }
+                            },
+                            {
+                                "dispute_id": "dsp_456",
+                                "recommendation": "ACCEPT or CHALLENGE",
+                                "summary": "Concise summary of analysis and key findings",
+                                "presigned_urls": {
+                                    "txt_summary": txt_summary_url
+                                }
                             }
-                        }
+                        ]
 
-                    Response Format Requirements:
-                    - dispute_ids: Must include all dispute IDs processed during analysis
-                    - recommendation: Must be either "ACCEPT" or "CHALLENGE" in uppercase
-                    - summary: Should be clear, concise (max 500 characters), and highlight key evidence points
-                    - presigned_urls: Must include presigned URL of the text summary from step 5
+                    b. Upload this JSON file:
+                        - Location: s3://farmers-qa-host/toggle/dispute_summaries/
+                        - Filename: dispute_summary_{policy_number}.json
+                        Use write_json operation
+
+                    c. After uploading:
+                        - Generate a presigned URL for the newly uploaded JSON file using generate_presigned_url
+                        - Update each dispute object in the list with write_json operation:
+                            [
+                                {
+                                    ...previous content for dispute 1...,
+                                    "presigned_urls": {
+                                        "self": "Presigned URL for this JSON file",
+                                        "txt_summary": txt_summary_url
+                                    }
+                                },
+                                {
+                                    ...previous content for dispute 2...,
+                                    "presigned_urls": {
+                                        "self": "Presigned URL for this JSON file",
+                                        "txt_summary": txt_summary_url
+                                    }
+                                }
+                            ]
+                    d. Store this updated JSON content for later use in the response in step 8
+
 
                 7. After saving:
                     - Confirm file creation
                     - Report file location
                     - List key evidence points included
+
+                8. Dispute Analysis Response Format Requirements:
+                    After analyzing disputes, you MUST ONLY respond with a JSON array in the following format, with no additional text or explanations.
+                    DO NOT SAY "here is the JSON" or "the JSON is below" or anything similar. Just provide the ONLY THE JSON content.
+
+                    [
+                        {
+                            "dispute_id": "dsp_123",
+                            "recommendation": "ACCEPT or CHALLENGE",
+                            "summary": "Concise summary of analysis and key findings",
+                            "presigned_urls": {
+                                "self": "Presigned URL for this JSON file",
+                                "txt_summary": "Presigned URL for the text summary"
+                            }
+                        }
+                    ]
 
                 Writing Style Requirements:
                     - Maintain professional, formal tone

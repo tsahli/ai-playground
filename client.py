@@ -80,8 +80,13 @@ class BedrockClient:
 
     def _build_request(self, messages: List[Dict]) -> Dict:
         temperature = 0.0
+        max_tokens = None
 
-        inference_config = {"temperature": temperature}
+        inference_config = {
+            "temperature": temperature,
+        }
+        if max_tokens is not None:
+            inference_config["maxTokens"] = max_tokens
 
         request = {
             "modelId": self.model_arn,
