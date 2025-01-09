@@ -21,7 +21,7 @@ class DisputeAnalyzer:
 
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self.base_url = "https://api.checkout.com"
+        self.base_url = "https://api.sandbox.checkout.com"
 
     def get_dispute(self, dispute_id: str) -> DisputeResult:
         """Fetch dispute details from API"""
