@@ -450,7 +450,7 @@ class GeneratePresignedUrlOperation(S3Operation):
                 return {"error": "Both bucket and key are required"}
 
             params = params or {}
-            expiration = params.get("expiration", 604800)  # Default 1 week
+            expiration = 604800  # Default 1 week
             http_method = params.get("http_method", "GET")
 
             # Generate the presigned URL

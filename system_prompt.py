@@ -146,6 +146,7 @@ SYSTEM_PROMPT = """
                     * Transaction patterns
                     * Policy status and history
                     * Billing consistency and payment patterns
+                    * Status of the dispute (won and lost disputes should be ACCEPTED)
 
 
         OPERATIONAL GUIDELINES:
@@ -201,6 +202,7 @@ SYSTEM_PROMPT = """
                         * Transaction legitimacy
                         * Customer communication history
                     - Consider dispute reason codes
+                    - Consider dispute statuses
                     - Assess deadline requirements
                     - Generate ACCEPT/CHALLENGE recommendation with detailed justification
 
