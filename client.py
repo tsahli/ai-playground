@@ -79,10 +79,15 @@ class BedrockClient:
         raise Exception(f"Exceeded maximum tool rounds ({max_tool_rounds})")
 
     def _build_request(self, messages: List[Dict]) -> Dict:
+        temperature = 0.0
+
+        inference_config = {"temperature": temperature}
+
         request = {
             "modelId": self.model_arn,
             "system": [{"text": self.system_prompt}],
             "messages": messages,
+            "inferenceConfig": inference_config,
         }
 
         if self.tools:
